@@ -9,7 +9,7 @@ set -e
 MAIN_DEFCONFIG=pineapple_gki_defconfig
 
 # 2. 内核版本基础标识
-LOCALVERSION_BASE=-android14-Kokuban-Elysia-BYEC-SukiSUU
+LOCALVERSION_BASE=-android14-Kokuban-Elysia-BYEC-LKM
 
 # 3. LTO (Link Time Optimization)
 LTO=""
@@ -28,7 +28,7 @@ ZIP_NAME_PREFIX="S24_kernel"
 GITHUB_REPO="YuzakiKokuban/android_kernel_samsung_sm8650"
 AUTO_RELEASE=true
 IS_PRERELEASE=${IS_PRERELEASE:-true}
-PATCH_LINUX=true
+PATCH_LINUX=false
 
 
 # --- 脚本开始 ---

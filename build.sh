@@ -25,13 +25,9 @@ ANYKERNEL_BRANCH="pineapple"
 ZIP_NAME_PREFIX="S24_kernel"
 
 # 7. GitHub Release 配置
-# !! 请将这里的用户名替换成你自己的 !!
 GITHUB_REPO="YuzakiKokuban/android_kernel_samsung_sm8650"
-# 设置为 true 以启用自动发布
 AUTO_RELEASE=true
-# 设置为 true 以发布为 Pre-release (预发布)
 IS_PRERELEASE=${IS_PRERELEASE:-true}
-# 设置为 false 以跳过patch_linux
 PATCH_LINUX=false
 
 
@@ -96,9 +92,21 @@ fi
 
 # 5. 开始编译内核
 echo "--- 开始编译内核 (-j$(nproc)) ---"
-# 直接将版本号通过 LOCALVERSION 参数传递给 make，编译系统会自动附加 git hash
+
+# !! 关键修复：将 ccache 设置移动到这里，确保它在 PATH 的最前面 !!
+if command -v ccache &> /dev/null; then
+    echo "--- 启用 ccache 编译缓存 ---"
+    export CCACHE_EXEC=$(which ccache)
+    ccache -M 5G
+    export PATH="/usr/lib/ccache:$PATH"
+fi
+
+# 显示 ccache 初始统计信息
+ccache -s
 make -j$(nproc) ${MAKE_ARGS} LOCALVERSION="${LOCALVERSION_BASE}" 2>&1 | tee kernel_build_log.txt
 BUILD_STATUS=${PIPESTATUS[0]}
+echo "--- 编译结束，显示 ccache 最终统计信息 ---"
+ccache -s
 
 if [ $BUILD_STATUS -ne 0 ]; then
     echo "--- 内核编译失败！ ---"
@@ -108,7 +116,7 @@ fi
 
 echo -e "\n--- 内核编译成功！ ---\n"
 
-# 6. 打包 AnyKernel3 Zip 和 boot.img
+# 6. 打包 AnyKernel3 Zip
 echo "--- 正在准备打包环境 ---"
 cd out
 
@@ -136,28 +144,20 @@ else
     echo "--- patch_linux 执行完毕, 已生成 zImage ---"
 fi
 
-if ! command -v lz4 &> /dev/null; then
-    echo "错误: 未找到 'lz4' 命令。请先安装 lz4 工具。"
-    exit 1
-fi
-
-if [ ! -f "tools/libmagiskboot.so" ] || [ ! -f "tools/boot.img.lz4" ]; then
-    echo "错误: boot.img 打包工具不完整！请检查你的 AnyKernel3 仓库。"
-    exit 1
-fi
-
 kernel_release=$(cat ../include/config/kernel.release)
 final_name="${ZIP_NAME_PREFIX}_${kernel_release}_$(date '+%Y%m%d')"
 
 echo "--- 正在创建 Zip 刷机包: ${final_name}.zip ---"
-zip -r9 "../${final_name}.zip" . -x "*.zip" -x "tools/boot.img.lz4" -x "tools/libmagiskboot.so"
+zip -r9 "../${final_name}.zip" . -x "*.zip" -x "tools/boot.img.lz4" -x "tools/libmagiskboot.so" -x "README.md" -x "LICENSE" -x '.*' -x '*/.*'
 
 ZIP_FILE_PATH=$(realpath "../${final_name}.zip")
 UPLOAD_FILES="$ZIP_FILE_PATH"
 
-# 检查是否在 GitHub Actions 环境中 (CI=true)
 if [ "$CI" != "true" ]; then
+    # ... (创建 .img 的逻辑不变) ...
     echo "--- 正在创建 boot.img: ${final_name}.img ---"
+    if ! command -v lz4 &> /dev/null; then echo "错误: lz4 未安装。"; exit 1; fi
+    if [ ! -f "tools/libmagiskboot.so" ] || [ ! -f "tools/boot.img.lz4" ]; then echo "错误: boot.img 打包工具不完整。"; exit 1; fi
     cp zImage tools/kernel
     cd tools
     chmod +x libmagiskboot.so
@@ -203,9 +203,8 @@ if [ -z "$GH_TOKEN" ]; then
     exit 1
 fi
 
-# 从 LOCALVERSION_BASE 提取构建类型 (最后一个'-'之后的部分)
-BUILD_TYPE=${LOCALVERSION_BASE##*-}
 TARGET_BRANCH=${TARGET_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+BUILD_TYPE=${LOCALVERSION_BASE##*-}
 TAG="release-${BUILD_TYPE}-$(date +%Y%m%d-%H%M%S)"
 RELEASE_TITLE="新内核构建 - ${kernel_release} ($(date +'%Y-%m-%d %R'))"
 RELEASE_NOTES="由构建脚本在 $(date) 自动发布。"

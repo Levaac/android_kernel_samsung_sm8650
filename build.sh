@@ -205,7 +205,7 @@ fi
 
 # 从 LOCALVERSION_BASE 提取构建类型 (最后一个'-'之后的部分)
 BUILD_TYPE=${LOCALVERSION_BASE##*-}
-
+TARGET_BRANCH=${TARGET_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
 TAG="release-${BUILD_TYPE}-$(date +%Y%m%d-%H%M%S)"
 RELEASE_TITLE="新内核构建 - ${kernel_release} ($(date +'%Y-%m-%d %R'))"
 RELEASE_NOTES="由构建脚本在 $(date) 自动发布。"
@@ -219,6 +219,7 @@ fi
 
 echo "仓库: $GITHUB_REPO"
 echo "标签: $TAG"
+echo "目标分支: $TARGET_BRANCH"
 echo "标题: $RELEASE_TITLE"
 echo "上传文件: $UPLOAD_FILES"
 
@@ -230,6 +231,7 @@ RELEASE_OUTPUT=$(gh release create "$TAG" \
     --repo "$GITHUB_REPO" \
     --title "$RELEASE_TITLE" \
     --notes "$RELEASE_NOTES" \
+    --target "$TARGET_BRANCH" \
     $PRERELEASE_FLAG 2>&1)
 RELEASE_STATUS=$?
 set -e
